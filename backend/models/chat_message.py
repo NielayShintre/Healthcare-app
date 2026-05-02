@@ -6,8 +6,8 @@ from .report import ParsedReport
 class ChatRequest(BaseModel):
     message: str
     patient_context: PatientContext
-    reports: List[ParsedReport]
-    conversation_history: List[Dict[str, str]]
+    reports: List[ParsedReport] = []
+    conversation_history: List[Dict[str, str]] = []
 
 class ChatResponse(BaseModel):
     answer: str

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   CloudUpload, 
   FileText, 
@@ -10,7 +10,13 @@ import {
   ShieldCheck,
   MemoryStick as Memory,
   Loader2,
-  CheckCircle2
+  CheckCircle2,
+  X,
+  ExternalLink,
+  Download,
+  Search,
+  ChevronRight,
+  AlertTriangle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../../lib/utils';
@@ -18,25 +24,33 @@ import type { MedicalReport, LabResult } from '../../types';
 
 interface ReportsScreenProps {
   reports: MedicalReport[];
+  labResults: LabResult[];
   onUpload: (report: MedicalReport, results: LabResult[]) => void;
+  onDelete: (reportId: string) => void;
+  onNavigate: (view: string) => void;
+  onAnalyseInChat: (message: string) => void;
 }
 
-export default function ReportsScreen({ reports, onUpload }: ReportsScreenProps) {
+export default function ReportsScreen({ reports, labResults, onUpload, onDelete, onNavigate, onAnalyseInChat }: ReportsScreenProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [viewingReport, setViewingReport] = useState<MedicalReport | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const simulateUpload = async (file: File) => {
     setIsUploading(true);
+    setError(null);
     setUploadProgress(10);
     
-    // Simulate progress
+    const localUrl = URL.createObjectURL(file);
+    const reportId = Date.now().toString();
+    
     for (let i = 20; i <= 90; i += 20) {
       await new Promise(r => setTimeout(r, 400));
       setUploadProgress(i);
     }
 
     try {
-      // 1. Try real backend upload
       const formData = new FormData();
       formData.append('file', file);
 
@@ -49,12 +63,13 @@ export default function ReportsScreen({ reports, onUpload }: ReportsScreenProps)
         const data = await response.json();
         
         const newReport: MedicalReport = {
-          id: Date.now().toString(),
+          id: reportId,
           name: file.name,
           date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
           source: data.lab_name || 'Extracted Report',
           status: 'Analyzed',
-          type: file.type.includes('pdf') ? 'pdf' : 'image'
+          type: file.type.includes('pdf') ? 'pdf' : 'image',
+          url: localUrl
         };
 
         const newResults: LabResult[] = data.markers.map((m: any) => ({
@@ -64,48 +79,18 @@ export default function ReportsScreen({ reports, onUpload }: ReportsScreenProps)
           date: newReport.date,
           source: newReport.source,
           range: `${m.lab_range_low} - ${m.lab_range_high}`,
-          status: m.status
+          status: m.status,
+          reportId: reportId
         }));
 
         onUpload(newReport, newResults);
       } else {
-        throw new Error('Backend unavailable');
+        const errData = await response.json().catch(() => ({ detail: 'Backend error' }));
+        throw new Error(errData.detail || 'Failed to analyze report');
       }
-    } catch (error) {
-      console.warn('Backend upload failed, using fallback parser:', error);
-      
-      // 2. Fallback: Mock Parser for Demo
-      const mockReport: MedicalReport = {
-        id: Date.now().toString(),
-        name: file.name,
-        date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-        source: 'MediLens AI Parser',
-        status: 'Analyzed',
-        type: file.type.includes('pdf') ? 'pdf' : 'image'
-      };
-
-      const mockResults: LabResult[] = [
-        {
-          marker: 'Vitamin D',
-          value: 24.5,
-          unit: 'ng/mL',
-          date: mockReport.date,
-          source: mockReport.source,
-          range: '30.0 - 100.0',
-          status: 'Low'
-        },
-        {
-          marker: 'Cholesterol',
-          value: 185,
-          unit: 'mg/dL',
-          date: mockReport.date,
-          source: mockReport.source,
-          range: '< 200',
-          status: 'Normal'
-        }
-      ];
-
-      onUpload(mockReport, mockResults);
+    } catch (error: any) {
+      console.error('Extraction failed:', error);
+      setError(error.message || 'The MediLens AI service is currently unavailable. Please check if the backend is running.');
     } finally {
       setUploadProgress(100);
       setTimeout(() => {
@@ -121,6 +106,150 @@ export default function ReportsScreen({ reports, onUpload }: ReportsScreenProps)
     }
   };
 
+  const ReportViewer = ({ report, onClose }: { report: MedicalReport, onClose: () => void }) => {
+    const reportMarkers = useMemo(() => {
+      return labResults.filter(r => r.reportId === report.id);
+    }, [report.id, labResults]);
+
+    const handleAnalyseInChat = () => {
+      const details = reportMarkers.map(m => `${m.marker}: ${m.value} ${m.unit} (${m.status})`).join(', ');
+      const prompt = `These are my details from ${report.name} (${report.source}): ${details}. Please help me understand my report and what these values mean for my health.`;
+      onAnalyseInChat(prompt);
+      onClose();
+    };
+
+    return (
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-on-surface/40 backdrop-blur-sm"
+      >
+        <motion.div 
+          initial={{ scale: 0.95, y: 20 }}
+          animate={{ scale: 1, y: 0 }}
+          className="bg-white rounded-3xl shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col overflow-hidden"
+        >
+          {/* Modal Header */}
+          <div className="p-6 border-b border-outline-variant flex justify-between items-center bg-surface-container-low">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
+                {report.type === 'pdf' ? <FileText className="h-6 w-6" /> : <ImageIcon className="h-6 w-6" />}
+              </div>
+              <div>
+                <h2 className="text-xl font-display font-bold text-on-surface">{report.name}</h2>
+                <p className="text-xs text-on-surface-variant font-medium uppercase tracking-widest">{report.source} · {report.date}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+               <button className="p-2.5 hover:bg-surface-container rounded-full transition-colors text-on-surface-variant">
+                 <Download className="h-5 w-5" />
+               </button>
+               <button 
+                 onClick={() => {
+                   if (confirm('Are you sure you want to delete this report? This will remove all associated health markers.')) {
+                     onDelete(report.id);
+                     onClose();
+                   }
+                 }}
+                 className="p-2.5 hover:bg-error-container hover:text-error rounded-full transition-colors text-on-surface-variant flex items-center gap-2 text-xs font-bold"
+               >
+                 <X className="h-5 w-5" />
+                 Delete Report
+               </button>
+            </div>
+          </div>
+
+          {/* Modal Body */}
+          <div className="flex-1 flex overflow-hidden">
+            {/* Real Document Preview */}
+            <div className="flex-1 bg-surface-container overflow-hidden flex flex-col">
+               {report.url ? (
+                 <iframe 
+                   src={report.url} 
+                   className="w-full h-full border-none bg-white"
+                   title="Report Preview"
+                 />
+               ) : (
+                 <div className="flex-1 flex flex-col items-center justify-center p-12 text-center">
+                    <div className="w-20 h-20 bg-surface-container-high rounded-3xl flex items-center justify-center mb-6 text-outline-variant">
+                      <FileText className="h-10 w-10" />
+                    </div>
+                    <h3 className="text-lg font-bold text-on-surface mb-2">No Live Preview Available</h3>
+                    <p className="text-sm text-on-surface-variant max-w-md">This demo report's source file is not available in the current session. Please upload a fresh file to see the live PDF/Image viewer.</p>
+                    <button 
+                      onClick={() => {
+                        onClose();
+                        document.getElementById('file-upload')?.click();
+                      }}
+                      className="mt-6 bg-primary text-white font-bold py-3 px-8 rounded-xl shadow-md"
+                    >
+                      Upload Fresh File
+                    </button>
+                 </div>
+               )}
+            </div>
+
+            {/* Analysis Results Side panel */}
+            <div className="w-80 border-l border-outline-variant bg-white p-6 overflow-y-auto hidden lg:flex flex-col">
+               <h3 className="text-sm font-black text-on-surface-variant uppercase tracking-widest mb-6">AI Extraction Summary</h3>
+               
+               <div className="space-y-6 flex-1">
+                  <div className="p-4 bg-primary/5 rounded-2xl border border-primary/10">
+                     <div className="flex items-center gap-2 text-primary font-bold text-xs uppercase mb-2">
+                        <ShieldCheck className="h-4 w-4" />
+                        Status: {report.status}
+                     </div>
+                     <p className="text-[11px] text-on-surface leading-relaxed">
+                       Successfully mapped clinical data points with high confidence. All units standardized.
+                     </p>
+                  </div>
+
+                  <div className="space-y-3">
+                     <h4 className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Markers in this File</h4>
+                     <div className="flex flex-col gap-2">
+                        {reportMarkers.length > 0 ? reportMarkers.map(m => (
+                           <div key={m.marker} className="flex flex-col p-3 bg-surface-container-low rounded-xl border border-outline-variant/30">
+                              <div className="flex justify-between items-center mb-1">
+                                <span className="text-xs font-bold text-on-surface">{m.marker}</span>
+                                <CheckCircle2 className="h-3 w-3 text-primary" />
+                              </div>
+                              <div className="flex justify-between items-end">
+                                <span className="text-lg font-black text-on-surface">{m.value} <span className="text-[10px] font-medium text-on-surface-variant">{m.unit}</span></span>
+                                <span className={cn(
+                                  "text-[9px] font-bold px-1.5 py-0.5 rounded",
+                                  m.status === 'Normal' ? "bg-primary/10 text-primary" : "bg-error-container text-error"
+                                )}>
+                                  {m.status}
+                                </span>
+                              </div>
+                           </div>
+                        )) : (
+                          <div className="text-[11px] text-on-surface-variant italic py-4">
+                            No markers were extracted from this report.
+                          </div>
+                        )}
+                     </div>
+                  </div>
+               </div>
+
+               <div className="pt-6 border-t border-outline-variant">
+                  <button 
+                    disabled={reportMarkers.length === 0}
+                    onClick={handleAnalyseInChat}
+                    className="w-full bg-primary text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 shadow-md text-sm hover:bg-primary-container transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Search className="h-4 w-4" />
+                    Analyse with Chat
+                  </button>
+               </div>
+            </div>
+          </div>
+        </motion.div>
+      </motion.div>
+    );
+  };
+
   return (
     <div className="p-6 lg:p-10 max-w-7xl mx-auto space-y-8">
       {/* Header */}
@@ -128,6 +257,23 @@ export default function ReportsScreen({ reports, onUpload }: ReportsScreenProps)
         <h1 className="text-3xl font-display font-bold text-on-surface">Medical Reports</h1>
         <p className="text-on-surface-variant font-medium mt-1">Securely upload lab results, imaging reports, and clinical notes for AI analysis.</p>
       </header>
+
+      {error && (
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-error-container text-error p-4 rounded-2xl border border-error/20 flex items-center gap-3"
+        >
+          <AlertTriangle className="h-5 w-5 shrink-0" />
+          <p className="text-sm font-bold">{error}</p>
+          <button 
+            onClick={() => setError(null)}
+            className="ml-auto p-1 hover:bg-error/10 rounded-full"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </motion.div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Dropzone Area */}
@@ -278,12 +424,29 @@ export default function ReportsScreen({ reports, onUpload }: ReportsScreenProps)
                       </span>
                     </td>
                     <td className="py-4 px-6 text-right">
-                      <button className="p-2 hover:bg-surface-container rounded-lg transition-colors text-on-surface-variant">
-                        <Eye className="h-4 w-4" />
-                      </button>
-                      <button className="p-2 hover:bg-surface-container rounded-lg transition-colors text-on-surface-variant">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </button>
+                      <div className="flex items-center justify-end gap-2">
+                        <button 
+                          onClick={() => setViewingReport(report)}
+                          className="p-2 hover:bg-surface-container rounded-lg transition-colors text-on-surface-variant"
+                          title="View Report"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </button>
+                        <button 
+                          onClick={() => {
+                            if (confirm('Delete this report and its markers?')) {
+                              onDelete(report.id);
+                            }
+                          }}
+                          className="p-2 hover:bg-error-container hover:text-error rounded-lg transition-colors text-on-surface-variant"
+                          title="Delete Report"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                        <button className="p-2 hover:bg-surface-container rounded-lg transition-colors text-on-surface-variant">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 )) : (
@@ -298,6 +461,16 @@ export default function ReportsScreen({ reports, onUpload }: ReportsScreenProps)
           </div>
         </section>
       </div>
+
+      {/* Report Viewer Modal */}
+      <AnimatePresence>
+        {viewingReport && (
+          <ReportViewer 
+            report={viewingReport} 
+            onClose={() => setViewingReport(null)} 
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

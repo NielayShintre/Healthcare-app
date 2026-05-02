@@ -1,49 +1,74 @@
 #!/bin/bash
 
-# Function to handle cleanup on exit
-cleanup() {
-    echo "Stopping services..."
-    [ -n "$BACKEND_PID" ] && kill $BACKEND_PID 2>/dev/null
-    [ -n "$FRONTEND_PID" ] && kill $FRONTEND_PID 2>/dev/null
-    exit
-}
+# MediLens AI Platform - Startup Script
+# Optimized for macOS with Python 3.13 / 3.14 handling
 
-# Trap SIGINT and SIGTERM to cleanup
-trap cleanup SIGINT SIGTERM
+echo "🚀 Initializing MediLens AI Platform..."
 
-echo "🚀 Starting MediLens Unified Development Environment..."
+# Get absolute path of project root
+PROJECT_ROOT=$(pwd)
+BACKEND_DIR="$PROJECT_ROOT/backend"
+FRONTEND_DIR="$PROJECT_ROOT/frontend"
 
-# 1. Setup Backend
-echo "📦 Setting up Backend..."
-if [ ! -d "backend/venv" ]; then
-    echo "Creating virtual environment..."
-    python3 -m venv backend/venv
+# Check for Python 3.13 (Preferred for compatibility)
+PYTHON_CMD=""
+if command -v /opt/homebrew/bin/python3.13 &> /dev/null; then
+    PYTHON_CMD="/opt/homebrew/bin/python3.13"
+elif command -v python3.13 &> /dev/null; then
+    PYTHON_CMD="python3.13"
+elif command -v python3.12 &> /dev/null; then
+    PYTHON_CMD="python3.12"
+else
+    PYTHON_CMD="python3"
 fi
 
-# Ensure dependencies are installed
-# We set PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 to allow building pydantic-core on experimental Python versions (like 3.14)
-export PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1
-backend/venv/bin/pip install -r backend/requirements.txt --quiet
+echo "🐍 Using Python: $($PYTHON_CMD --version)"
 
-# Start Backend
+# 1. Setup Backend
+echo "📡 Setting up Backend..."
+cd "$BACKEND_DIR"
+
+# Reset venv if it was created with a different python version
+if [ -d "venv" ]; then
+    VENV_PYTHON_VER=$(./venv/bin/python --version 2>&1)
+    CURRENT_PYTHON_VER=$($PYTHON_CMD --version 2>&1)
+    if [ "$VENV_PYTHON_VER" != "$CURRENT_PYTHON_VER" ]; then
+        echo "♻️ Recreating virtual environment for version compatibility..."
+        rm -rf venv
+    fi
+fi
+
+if [ ! -d "venv" ]; then
+    $PYTHON_CMD -m venv venv
+fi
+
+source venv/bin/activate
+pip install --upgrade pip
+# Set ABI forward compatibility for Python 3.14 just in case, but 3.13 is primary now
+export PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1
+pip install -r requirements.txt
+
+# Start Backend in background
 echo "📡 Starting Backend on http://localhost:8000..."
-# We run as a module so relative imports in backend/main.py work
-export PYTHONPATH=$PYTHONPATH:$(pwd)
-backend/venv/bin/python -m backend.main > backend.log 2>&1 &
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload > "$PROJECT_ROOT/backend.log" 2>&1 &
 BACKEND_PID=$!
 
 # 2. Setup Frontend
 echo "📦 Setting up Frontend..."
-if [ ! -d "frontend/node_modules" ]; then
-    echo "Installing frontend dependencies..."
-    cd frontend && npm install --quiet && cd ..
+cd "$FRONTEND_DIR"
+
+# Only install if node_modules doesn't exist to save time
+if [ ! -d "node_modules" ]; then
+    npm install
 fi
 
+# Start Frontend in background
 echo "🌐 Starting Frontend on http://localhost:3000..."
-cd frontend
-npm run dev > ../frontend.log 2>&1 &
+npm run dev -- --port 3000 > "$PROJECT_ROOT/frontend.log" 2>&1 &
 FRONTEND_PID=$!
-cd ..
+
+# Cleanup on exit
+trap "kill $BACKEND_PID $FRONTEND_PID; echo 'Stopping services...'; exit" INT TERM
 
 echo "✅ All services are starting up!"
 echo "------------------------------------------------"
@@ -53,5 +78,5 @@ echo "Logs: backend.log, frontend.log"
 echo "------------------------------------------------"
 echo "Press Ctrl+C to stop both services."
 
-# Wait for both processes
+# Keep script running
 wait

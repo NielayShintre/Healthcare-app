@@ -14,8 +14,9 @@ export interface MedicalReport {
   name: string;
   date: string;
   source: string;
-  status: 'Analyzed' | 'Processing';
+  status: 'Analyzed' | 'Processing' | 'Pending';
   type: 'pdf' | 'image';
+  url?: string;
 }
 
 export interface VitalMetric {
@@ -28,10 +29,11 @@ export interface VitalMetric {
 
 export interface LabResult {
   marker: string;
-  value: number;
+  value: number | string;
   unit: string;
   date: string;
   source: string;
   range: string;
-  status: 'High' | 'Normal' | 'Borderline';
+  status: 'High' | 'Normal' | 'Borderline' | 'Low';
+  reportId?: string;
 }

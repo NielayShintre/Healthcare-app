@@ -1,56 +1,30 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
 import React, { useState, useEffect } from 'react';
 import { 
-  BarChart3, 
-  Upload, 
-  MessageSquare, 
-  User, 
-  LayoutDashboard, 
-  Plus, 
+  Activity, 
+  FileText, 
+  MessageCircle, 
+  Settings, 
   HelpCircle, 
   LogOut, 
+  Bell, 
   Menu, 
   X,
-  Bell,
-  Settings,
-  ShieldCheck,
-  ChevronRight,
-  Search,
-  Droplets,
-  Activity,
-  ArrowRight,
-  Download,
-  Share2,
-  AlertCircle,
-  FileText,
-  Image as ImageIcon,
-  History,
-  BookOpen,
-  Send,
-  PlusCircle,
-  Home,
-  Monitor
+  LayoutDashboard,
+  ClipboardList
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from './lib/utils';
 import { storage } from './lib/storage';
-import type { View, PatientData, MedicalReport, LabResult } from './types';
 
-// Mock data and components will be added here
-import OnboardingScreen from './components/screens/OnboardingScreen';
+// Screens
 import DashboardScreen from './components/screens/DashboardScreen';
+import OnboardingScreen from './components/screens/OnboardingScreen';
 import ReportsScreen from './components/screens/ReportsScreen';
 import ChatScreen from './components/screens/ChatScreen';
 import MarkersHistoryScreen from './components/screens/MarkersHistoryScreen';
+
+// Types
+import type { View, PatientData, MedicalReport, LabResult } from './types';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<View>('onboarding');
@@ -59,77 +33,99 @@ export default function App() {
   const [reports, setReports] = useState<MedicalReport[]>([]);
   const [labResults, setLabResults] = useState<LabResult[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [chatInitialMessage, setChatInitialMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    async function init() {
-      const storedPatient = await storage.get('patient_profile') as PatientData;
-      const storedReports = await storage.get('reports') as MedicalReport[] || [];
-      const storedLabResults = await storage.get('lab_results') as LabResult[] || [];
+    async function loadData() {
+      const storedPatient = await storage.get<PatientData>('patient_profile');
+      const storedReports = await storage.get<MedicalReport[]>('medical_reports');
+      const storedResults = await storage.get<LabResult[]>('lab_results');
       
       if (storedPatient) {
         setPatient(storedPatient);
-        setReports(storedReports);
-        setLabResults(storedLabResults);
         setCurrentView('dashboard');
       }
+      if (storedReports) setReports(storedReports);
+      if (storedResults) setLabResults(storedResults);
+      
       setIsLoading(false);
     }
-    init();
+    loadData();
   }, []);
+
+  const handleOnboardingComplete = async (data: PatientData) => {
+    setPatient(data);
+    await storage.set('patient_profile', data);
+    setCurrentView('dashboard');
+  };
 
   const enterDemoMode = async () => {
     const demoPatient: PatientData = {
-      fullName: "Sarah Jenkins (Demo)",
-      age: 34,
-      sex: "female",
-      height: 170,
-      weight: 68,
+      fullName: "Sarah Jenkins",
+      age: "42",
+      gender: "Female",
+      height: "165",
+      weight: "68",
       conditions: ["Type 2 Diabetes", "Hypertension"],
-      medications: "Metformin, Lisinopril",
+      medications: "Metformin 500mg, Lisinopril 10mg",
       allergies: "Penicillin"
     };
     
     const demoReports: MedicalReport[] = [
-      { id: 'demo-1', name: 'Comprehensive_Panel_Apr_2024.pdf', date: 'Apr 15, 2024', source: 'Apollo Diagnostics', status: 'Analyzed', type: 'pdf' }
+      { id: '1', name: 'Apollo_Labs_CBC.pdf', date: 'Apr 12, 2024', source: 'Apollo Diagnostics', status: 'Analyzed', type: 'pdf' },
+      { id: '2', name: 'Glucose_Checkup.jpg', date: 'Mar 05, 2024', source: 'Self-Reported', status: 'Analyzed', type: 'image' }
     ];
 
     const demoResults: LabResult[] = [
-      { marker: 'Hemoglobin', value: 11.2, unit: 'g/dL', date: 'Apr 15, 2024', source: 'Apollo Diagnostics', range: '13.0 - 17.5', status: 'Low' },
-      { marker: 'Fasting Glucose', value: 105, unit: 'mg/dL', date: 'Apr 15, 2024', source: 'Apollo Diagnostics', range: '70 - 100', status: 'High' }
+      { marker: 'Hemoglobin', value: 11.2, unit: 'g/dL', date: 'Apr 12, 2024', source: 'Apollo Labs', range: '13.0 - 17.5', status: 'Low' },
+      { marker: 'Fasting Glucose', value: 105, unit: 'mg/dL', date: 'Mar 05, 2024', source: 'Self-Reported', range: '70 - 99', status: 'High' },
+      { marker: 'Cholesterol', value: 185, unit: 'mg/dL', date: 'Apr 12, 2024', source: 'Apollo Labs', range: '< 200', status: 'Normal' }
     ];
 
-    await storage.set('patient_profile', demoPatient);
-    await storage.set('reports', demoReports);
-    await storage.set('lab_results', demoResults);
-    
     setPatient(demoPatient);
     setReports(demoReports);
     setLabResults(demoResults);
+    
+    await storage.set('patient_profile', demoPatient);
+    await storage.set('medical_reports', demoReports);
+    await storage.set('lab_results', demoResults);
+    
     setCurrentView('dashboard');
   };
 
-  const navItems = [
-    { id: 'dashboard', label: 'Overview', icon: LayoutDashboard },
-    { id: 'reports', label: 'Medical Reports', icon: Upload },
-    { id: 'chat', label: 'AI Chatbot', icon: MessageSquare },
-    { id: 'markers', label: 'Health Markers', icon: BarChart3 },
-  ];
-
-  const handleOnboardingComplete = async (data: PatientData) => {
-    await storage.set('patient_profile', data);
-    setPatient(data);
-    setCurrentView('dashboard');
-  };
-
-  const handleReportUpload = async (report: MedicalReport, results: LabResult[]) => {
+  const handleUpload = async (report: MedicalReport, results: LabResult[]) => {
     const newReports = [report, ...reports];
     const newResults = [...results, ...labResults];
-    
     setReports(newReports);
     setLabResults(newResults);
-    
     await storage.set('medical_reports', newReports);
     await storage.set('lab_results', newResults);
+  };
+
+  const handleDeleteReport = async (reportId: string) => {
+    // 1. Calculate new state
+    const newReports = reports.filter(r => r.id !== reportId);
+    const newResults = labResults.filter(r => r.reportId !== reportId);
+
+    // 2. Update UI State synchronously
+    setReports(newReports);
+    setLabResults(newResults);
+
+    // 3. Update Persistent Storage & Backend asynchronously
+    try {
+      await Promise.all([
+        storage.set('medical_reports', newReports),
+        storage.set('lab_results', newResults),
+        fetch(`http://localhost:8000/api/reports/${reportId}`, { method: 'DELETE' }).catch(err => console.warn('Backend delete failed:', err))
+      ]);
+    } catch (error) {
+      console.error('Persistence failed:', error);
+    }
+  };
+
+  const handleNavigateToChat = (message: string) => {
+    setChatInitialMessage(message);
+    setCurrentView('chat');
   };
 
   const renderView = () => {
@@ -138,12 +134,19 @@ export default function App() {
     switch(currentView) {
       case 'onboarding': return <OnboardingScreen onComplete={handleOnboardingComplete} onDemo={enterDemoMode} />;
       case 'dashboard': return <DashboardScreen onNavigate={setCurrentView} patient={patient} labResults={labResults} />;
-      case 'reports': return <ReportsScreen reports={reports} onUpload={handleReportUpload} />;
-      case 'chat': return <ChatScreen patient={patient} labResults={labResults} />;
+      case 'reports': return <ReportsScreen reports={reports} labResults={labResults} onUpload={handleUpload} onDelete={handleDeleteReport} onNavigate={setCurrentView} onAnalyseInChat={handleNavigateToChat} />;
+      case 'chat': return <ChatScreen patient={patient} labResults={labResults} initialMessage={chatInitialMessage} onMessageConsumed={() => setChatInitialMessage(null)} />;
       case 'markers': return <MarkersHistoryScreen labResults={labResults} />;
       default: return <DashboardScreen onNavigate={setCurrentView} patient={patient} labResults={labResults} />;
     }
   };
+
+  const navItems = [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'reports', label: 'Reports', icon: ClipboardList },
+    { id: 'markers', label: 'History', icon: Activity },
+    { id: 'chat', label: 'AI Chat', icon: MessageCircle },
+  ];
 
   const Sidebar = () => (
     <nav className="h-screen w-64 hidden lg:flex flex-col border-r bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 p-4 space-y-2 shrink-0 sticky top-0">
@@ -151,42 +154,19 @@ export default function App() {
         <h1 className="text-xl font-bold font-display text-primary tracking-tight">MedInsight AI</h1>
       </div>
 
-      {patient && (
-        <div className="flex items-center px-4 py-3 mb-6 bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-outline-variant/30">
-          <img 
-            src={`https://ui-avatars.com/api/?name=${encodeURIComponent(patient.fullName)}&background=00455d&color=fff`}
-            alt="Avatar" 
-            className="w-10 h-10 rounded-full mr-3 object-cover border border-outline-variant/50"
-            referrerPolicy="no-referrer"
-          />
-          <div className="min-w-0">
-            <p className="font-bold text-primary leading-tight truncate">{patient.fullName}</p>
-            <p className="text-xs text-on-surface-variant truncate">ID: #MI-{Math.floor(Math.random()*9000)+1000}</p>
-          </div>
-        </div>
-      )}
-
-      <button 
-        onClick={() => setCurrentView('reports')}
-        className="w-full bg-primary text-white py-2.5 px-4 rounded-lg font-semibold mb-6 flex items-center justify-center hover:bg-primary-container transition-colors shadow-sm"
-      >
-        <Plus className="mr-2 h-4 w-4" />
-        Upload New Report
-      </button>
-
       <div className="flex-1 space-y-1">
         {navItems.map((item) => (
           <button
             key={item.id}
             onClick={() => setCurrentView(item.id as View)}
             className={cn(
-              "w-full flex items-center px-4 py-3 rounded-lg duration-200 text-sm font-medium",
+              "w-full flex items-center px-4 py-2.5 rounded-xl text-sm font-bold transition-all",
               currentView === item.id 
-                ? "bg-white dark:bg-slate-800 text-primary font-bold border-r-4 border-primary shadow-sm" 
-                : "text-on-surface-variant hover:bg-slate-100 dark:hover:bg-slate-900"
+                ? "bg-primary text-white shadow-md" 
+                : "text-on-surface-variant hover:bg-slate-100"
             )}
           >
-            <item.icon className={cn("mr-3 h-5 w-5", currentView === item.id ? "text-primary" : "text-on-surface-variant")} />
+            <item.icon className="mr-3 h-5 w-5" />
             {item.label}
           </button>
         ))}
@@ -231,22 +211,23 @@ export default function App() {
           key={item.id}
           onClick={() => setCurrentView(item.id as View)}
           className={cn(
-            "flex flex-col items-center justify-center p-2 min-w-[64px] transition-transform active:scale-90",
-            currentView === item.id ? "text-primary" : "text-on-surface-variant"
+            "flex flex-col items-center p-2 rounded-xl transition-all",
+            currentView === item.id ? "text-primary" : "text-slate-400 hover:text-slate-600"
           )}
         >
-          <item.icon className="h-6 w-6 mb-1" />
-          <span className="text-[10px] font-bold uppercase tracking-wider">{item.label.split(' ')[0]}</span>
+          <item.icon className="h-6 w-6" />
+          <span className="text-[10px] font-bold mt-1 uppercase tracking-tighter">{item.label}</span>
         </button>
       ))}
     </nav>
   );
 
   return (
-    <div className="min-h-screen flex flex-col lg:flex-row bg-surface">
+    <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950 font-sans text-on-surface transition-colors selection:bg-primary/10">
       {currentView !== 'onboarding' && <Sidebar />}
-      {currentView !== 'onboarding' && <MobileHeader />}
       
+      {currentView !== 'onboarding' && <MobileHeader />}
+
       <main className={cn(
         "flex-1 flex flex-col min-w-0 transition-all",
         currentView !== 'onboarding' ? "mt-16 lg:mt-0 pb-24 lg:pb-0" : ""
@@ -269,4 +250,3 @@ export default function App() {
     </div>
   );
 }
-

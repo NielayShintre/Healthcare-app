@@ -1,26 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
-  Download, 
-  ArrowUpRight, 
-  CheckCircle2, 
+  TrendingUp, 
+  TrendingDown, 
+  Activity, 
+  Calendar, 
+  Info, 
   Search,
+  ChevronRight,
   Filter,
-  MoreVertical,
-  Activity,
+  ArrowRight,
   Droplet,
-  Heart,
-  Scale
+  Beaker,
+  Stethoscope
 } from 'lucide-react';
-import { 
-  LineChart, 
-  Line, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  ResponsiveContainer,
-  ReferenceLine
-} from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { cn } from '../../lib/utils';
 import type { LabResult } from '../../types';
 
@@ -29,32 +22,64 @@ interface MarkersHistoryScreenProps {
 }
 
 export default function MarkersHistoryScreen({ labResults }: MarkersHistoryScreenProps) {
-  const [selectedMarker, setSelectedMarker] = useState<string>(labResults[0]?.marker || 'Hemoglobin');
+  const [selectedMarker, setSelectedMarker] = useState<string | null>(
+    labResults.length > 0 ? labResults[0].marker : null
+  );
+  const [selectedRange, setSelectedRange] = useState('1Y');
 
-  const displayResults = labResults.length > 0 ? labResults : [];
-  
-  // Filter history for the selected marker
-  const markerHistory = displayResults.filter(r => r.marker === selectedMarker);
-  
-  // Create a trend chart data structure
-  const chartData = markerHistory.map(r => ({
-    date: r.date.split(',')[0], // Simplify date for chart
-    value: typeof r.value === 'number' ? r.value : parseFloat(r.value as any) || 0
-  })).reverse(); // Reverse to show chronological order if needed, but here we assume newest is first
+  // Get the most recent value for each marker
+  const latestResults = useMemo(() => {
+    const latestMap = new Map<string, LabResult>();
+    labResults.forEach(result => {
+      const existing = latestMap.get(result.marker);
+      if (!existing || new Date(result.date) > new Date(existing.date)) {
+        latestMap.set(result.marker, result);
+      }
+    });
+    return Array.from(latestMap.values());
+  }, [labResults]);
 
-  // Unique markers for selection cards
-  const uniqueMarkers = Array.from(new Set(labResults.map(r => r.marker)));
-  const latestResults = uniqueMarkers.map(m => labResults.find(r => r.marker === m)).filter(Boolean) as LabResult[];
-
-  const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'high': return 'bg-error-container text-error';
-      case 'low': return 'bg-error-container text-error';
-      case 'elevated': return 'bg-amber-100 text-amber-800';
-      case 'borderline': return 'bg-amber-50 text-amber-700';
-      default: return 'bg-surface-container-high text-on-surface-variant';
+  // Set initial selected marker if not already set
+  useMemo(() => {
+    if (!selectedMarker && latestResults.length > 0) {
+      setSelectedMarker(latestResults[0].marker);
     }
-  };
+  }, [latestResults, selectedMarker]);
+
+  const historyForSelectedMarker = useMemo(() => {
+    if (!selectedMarker) return [];
+    
+    let filtered = labResults
+      .filter(r => r.marker === selectedMarker)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    // Apply time range filter
+    const now = new Date();
+    if (selectedRange === '3M') {
+      const date = new Date();
+      date.setMonth(now.getMonth() - 3);
+      filtered = filtered.filter(r => new Date(r.date) >= date);
+    } else if (selectedRange === '6M') {
+      const date = new Date();
+      date.setMonth(now.getMonth() - 6);
+      filtered = filtered.filter(r => new Date(r.date) >= date);
+    } else if (selectedRange === '1Y') {
+      const date = new Date();
+      date.setFullYear(now.getFullYear() - 1);
+      filtered = filtered.filter(r => new Date(r.date) >= date);
+    }
+
+    return filtered;
+  }, [labResults, selectedMarker, selectedRange]);
+
+  const chartData = useMemo(() => {
+    return historyForSelectedMarker.map(r => ({
+      date: new Date(r.date).toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+      value: typeof r.value === 'number' ? r.value : parseFloat(r.value.toString())
+    }));
+  }, [historyForSelectedMarker]);
+
+  const displayResults = latestResults;
 
   return (
     <div className="p-6 lg:p-10 max-w-7xl mx-auto space-y-8">
@@ -69,9 +94,10 @@ export default function MarkersHistoryScreen({ labResults }: MarkersHistoryScree
           {['3M', '6M', '1Y', 'All'].map((range) => (
              <button 
               key={range}
+              onClick={() => setSelectedRange(range)}
               className={cn(
                 "px-4 py-2 rounded-lg text-xs font-bold transition-all",
-                range === '1Y' ? "bg-primary text-white" : "text-on-surface-variant hover:bg-surface-container"
+                selectedRange === range ? "bg-primary text-white shadow-sm" : "text-on-surface-variant hover:bg-surface-container"
               )}
              >
                 {range}
@@ -90,108 +116,123 @@ export default function MarkersHistoryScreen({ labResults }: MarkersHistoryScree
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* Left Column: Marker Selection */}
           <section className="lg:col-span-4 flex flex-col gap-4">
-            {latestResults.map((result) => (
-              <button
-                key={result.marker}
-                onClick={() => setSelectedMarker(result.marker)}
-                className={cn(
-                  "group text-left p-5 rounded-2xl border transition-all duration-300 relative overflow-hidden bg-white",
-                  selectedMarker === result.marker ? "border-primary shadow-lg ring-1 ring-primary/20" : "border-outline-variant shadow-sm hover:border-primary/50"
-                )}
-              >
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-outline">LATEST READING</p>
-                    <h3 className="text-lg font-display font-bold text-on-surface mt-1">{result.marker}</h3>
+            <h3 className="text-sm font-black text-on-surface-variant uppercase tracking-[0.2em] px-1 mb-2">Available Markers</h3>
+            <div className="flex flex-col gap-3">
+              {latestResults.map((result) => (
+                <button
+                  key={result.marker}
+                  onClick={() => setSelectedMarker(result.marker)}
+                  className={cn(
+                    "group text-left p-5 rounded-2xl border transition-all duration-300 relative overflow-hidden bg-white",
+                    selectedMarker === result.marker ? "border-primary shadow-lg ring-1 ring-primary/20" : "border-outline-variant shadow-sm hover:border-primary/50"
+                  )}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm font-bold text-on-surface">{result.marker}</span>
+                    {result.status !== 'Normal' && (
+                      <span className="bg-error-container text-error text-[10px] font-black uppercase px-2 py-0.5 rounded">
+                        {result.status}
+                      </span>
+                    )}
                   </div>
-                  <span className={cn(
-                    "px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider",
-                    getStatusColor(result.status)
-                  )}>
-                    {result.status}
-                  </span>
-                </div>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-data font-bold text-on-surface">{result.value}</span>
-                  <span className="text-xs font-bold text-outline-variant uppercase">{result.unit}</span>
-                </div>
-                <p className="text-[10px] font-bold text-on-surface-variant text-right border-t border-outline-variant/10 mt-4 pt-2">
-                  Source: {result.source} · {result.date}
-                </p>
-              </button>
-            ))}
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-2xl font-black text-on-surface">{result.value}</span>
+                    <span className="text-xs font-medium text-on-surface-variant">{result.unit}</span>
+                  </div>
+                  <div className="mt-4 flex items-center justify-between text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">
+                    <span>Range: {result.range}</span>
+                    <ArrowRight className={cn("h-4 w-4 transition-transform group-hover:translate-x-1", selectedMarker === result.marker ? "text-primary" : "text-outline-variant")} />
+                  </div>
+                </button>
+              ))}
+            </div>
           </section>
 
-          {/* Right Column: Trend & History */}
+          {/* Right Column: Detailed Trend and History */}
           <section className="lg:col-span-8 space-y-6">
-            <div className="bg-white border border-outline-variant rounded-2xl p-8 shadow-sm">
+            <div className="bg-white rounded-2xl border border-outline-variant p-8 shadow-sm">
               <div className="flex justify-between items-start mb-8">
                 <div>
-                  <h2 className="text-2xl font-display font-bold text-on-surface">{selectedMarker} Trend</h2>
-                  <p className="text-sm font-medium text-on-surface-variant mt-1">
-                    Normal Range: <span className="font-bold text-primary">{latestResults.find(r => r.marker === selectedMarker)?.range || 'N/A'}</span>
-                  </p>
+                  <h2 className="text-2xl font-display font-black text-on-surface flex items-center gap-3">
+                    <Beaker className="h-6 w-6 text-primary" />
+                    {selectedMarker} Analysis
+                  </h2>
+                  <p className="text-sm text-on-surface-variant mt-1 font-medium">Standardized trend across {historyForSelectedMarker.length} recorded results.</p>
+                </div>
+                <div className="bg-primary/10 text-primary p-3 rounded-xl">
+                  <TrendingUp className="h-6 w-6" />
                 </div>
               </div>
-              <div className="h-72 w-full">
+
+              <div className="h-72 w-full mb-8">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eee" />
-                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
-                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
+                  <AreaChart data={chartData}>
+                    <defs>
+                      <linearGradient id="colorMarker" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#00455d" stopOpacity={0.2}/>
+                        <stop offset="95%" stopColor="#00455d" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#666'}} dy={10} />
+                    <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#666'}} dx={-10} />
                     <Tooltip 
-                      contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}
+                      contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.1)' }}
+                      itemStyle={{ fontWeight: 'bold', color: '#00455d' }}
                     />
-                    <Line 
-                      type="monotone" 
-                      dataKey="value" 
-                      stroke="#00455d" 
-                      strokeWidth={4} 
-                      dot={{ r: 6, fill: '#fff', stroke: '#00455d', strokeWidth: 2 }}
-                      activeDot={{ r: 8, fill: '#00455d' }} 
-                    />
-                  </LineChart>
+                    <Area type="monotone" dataKey="value" stroke="#00455d" strokeWidth={4} fillOpacity={1} fill="url(#colorMarker)" />
+                  </AreaChart>
                 </ResponsiveContainer>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-6 border-t border-outline-variant">
+                 <div className="space-y-1">
+                    <span className="text-[10px] font-black text-on-surface-variant uppercase tracking-widest">Baseline</span>
+                    <p className="text-lg font-bold text-on-surface">{historyForSelectedMarker[0]?.value || '-'} {historyForSelectedMarker[0]?.unit}</p>
+                 </div>
+                 <div className="space-y-1">
+                    <span className="text-[10px] font-black text-on-surface-variant uppercase tracking-widest">Current</span>
+                    <p className="text-lg font-bold text-on-surface">{historyForSelectedMarker[historyForSelectedMarker.length-1]?.value || '-'} {historyForSelectedMarker[historyForSelectedMarker.length-1]?.unit}</p>
+                 </div>
+                 <div className="space-y-1">
+                    <span className="text-[10px] font-black text-on-surface-variant uppercase tracking-widest">Clinical Status</span>
+                    <p className={cn(
+                      "text-lg font-bold",
+                      historyForSelectedMarker[historyForSelectedMarker.length-1]?.status === 'Normal' ? "text-primary" : "text-error"
+                    )}>
+                      {historyForSelectedMarker[historyForSelectedMarker.length-1]?.status || 'Unknown'}
+                    </p>
+                 </div>
               </div>
             </div>
 
-            <div className="bg-white border border-outline-variant rounded-2xl shadow-sm overflow-hidden">
-               <div className="p-6 border-b border-outline-variant flex justify-between items-center">
-                  <h3 className="text-xl font-display font-bold text-on-surface">Reading History</h3>
-                  <div className="relative w-64">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-outline" />
-                    <input placeholder="Search records..." className="w-full pl-10 pr-4 py-2 border border-outline-variant rounded-xl text-sm" />
-                  </div>
+            {/* History Table for Selected Marker */}
+            <div className="bg-white rounded-2xl border border-outline-variant shadow-sm overflow-hidden">
+               <div className="p-6 border-b border-outline-variant">
+                  <h3 className="font-bold text-on-surface">Timeline History</h3>
                </div>
                <div className="overflow-x-auto">
                  <table className="w-full text-left">
-                   <thead>
-                     <tr className="bg-surface-container border-b border-outline-variant">
-                       <th className="py-4 px-6 text-xs font-bold uppercase">Date</th>
-                       <th className="py-4 px-6 text-xs font-bold uppercase">Source</th>
-                       <th className="py-4 px-6 text-xs font-bold uppercase">Result</th>
-                       <th className="py-4 px-6 text-xs font-bold uppercase text-right">Status</th>
-                     </tr>
-                   </thead>
-                   <tbody>
-                      {markerHistory.map((row, idx) => (
-                        <tr key={idx} className="border-b border-outline-variant/20 hover:bg-surface-container transition-colors">
-                          <td className="py-5 px-6 font-medium text-on-surface">{row.date}</td>
-                          <td className="py-5 px-6 text-sm text-on-surface-variant">{row.source}</td>
-                          <td className="py-5 px-6 font-bold text-on-surface">
-                            {row.value} <span className="text-[10px] font-bold text-outline uppercase">{row.unit}</span>
-                          </td>
-                          <td className="py-5 px-6 text-right">
-                            <span className={cn(
-                              "px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider",
-                              getStatusColor(row.status)
-                            )}>
-                              {row.status}
-                            </span>
-                          </td>
+                    <thead>
+                      <tr className="bg-surface-container text-[10px] font-black text-on-surface-variant uppercase tracking-widest">
+                        <th className="py-4 px-6">Date</th>
+                        <th className="py-4 px-6">Result</th>
+                        <th className="py-4 px-6">Unit</th>
+                        <th className="py-4 px-6">Reference</th>
+                        <th className="py-4 px-6">Lab Source</th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-sm">
+                      {[...historyForSelectedMarker].reverse().map((row, idx) => (
+                        <tr key={idx} className="border-b border-outline-variant/30 hover:bg-surface-container-low">
+                          <td className="py-4 px-6 font-medium text-on-surface">{row.date}</td>
+                          <td className="py-4 px-6 font-black text-on-surface">{row.value}</td>
+                          <td className="py-4 px-6 text-on-surface-variant">{row.unit}</td>
+                          <td className="py-4 px-6 text-on-surface-variant">{row.range}</td>
+                          <td className="py-4 px-6 italic text-on-surface-variant">{row.source}</td>
                         </tr>
                       ))}
-                   </tbody>
+                    </tbody>
                  </table>
                </div>
             </div>

@@ -1,23 +1,32 @@
-from pydantic import BaseModel
-from typing import List, Optional
+from pydantic import BaseModel, field_validator
+from typing import List, Optional, Union
 
 class PatientContext(BaseModel):
-    age_bracket: str
-    biological_sex: str
-    unit_preference: str
-    known_conditions: List[str] = []
-    current_medications: str = ""
-    known_allergies: str = ""
+    age: Optional[Union[str, int, float]] = "0"
+    sex: Optional[str] = "unknown"
+    weight: Optional[Union[str, int, float]] = ""
+    height: Optional[Union[str, int, float]] = ""
+    conditions: List[str] = []
+    medications: Optional[str] = ""
+    allergies: Optional[str] = ""
+
+    @field_validator('age', 'weight', 'height', mode='before')
+    @classmethod
+    def coerce_to_str(cls, v):
+        if v is None:
+            return ""
+        return str(v)
 
     def to_xml(self) -> str:
-        conditions = ", ".join(self.known_conditions)
+        cond_str = ", ".join(self.conditions)
         return f"""
 <patient_context>
-  <age_bracket>{self.age_bracket}</age_bracket>
-  <biological_sex>{self.biological_sex}</biological_sex>
-  <unit_preference>{self.unit_preference}</unit_preference>
-  <known_conditions>{conditions}</known_conditions>
-  <current_medications>{self.current_medications}</current_medications>
-  <known_allergies>{self.known_allergies}</known_allergies>
+  <age>{self.age}</age>
+  <sex>{self.sex}</sex>
+  <weight>{self.weight}</weight>
+  <height>{self.height}</height>
+  <conditions>{cond_str}</conditions>
+  <medications>{self.medications}</medications>
+  <allergies>{self.allergies}</allergies>
 </patient_context>
 """

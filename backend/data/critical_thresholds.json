@@ -1,0 +1,10 @@
+{
+  "Potassium": {"critical_low": 2.5, "critical_high": 6.5, "unit": "mmol/L"},
+  "Sodium": {"critical_low": 120, "critical_high": 160, "unit": "mmol/L"},
+  "Hemoglobin": {"critical_low": 7.0, "critical_high": 20.0, "unit": "g/dL"},
+  "Fasting Glucose": {"critical_low": 50, "critical_high": 500, "unit": "mg/dL"},
+  "INR": {"critical_high": 5.0, "unit": ""},
+  "Platelets": {"critical_low": 20000, "critical_high": 1000000, "unit": "/μL"},
+  "Creatinine": {"critical_high": 10.0, "unit": "mg/dL"},
+  "Calcium": {"critical_low": 6.0, "critical_high": 13.0, "unit": "mg/dL"}
+}

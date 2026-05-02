@@ -35,3 +35,24 @@ export interface LabResult {
   range: string;
   status: 'High' | 'Normal' | 'Borderline';
 }
+
+export type ReportAnalysis = {
+  patient: { name: string | null; age: number | null; sex: 'male' | 'female' | 'other' | null };
+  reportMeta: { labOrHospital: string | null; reportDate: string | null; reportType: string | null };
+  summary: string;
+  vitals: Array<{ label: string; value: string; unit: string; status: 'Normal' | 'Elevated' | 'Caution' }>;
+  markers: Array<{
+    name: string;
+    category: 'lipids' | 'metabolic' | 'liver' | 'thyroid' | 'cbc' | 'minerals' | 'inflammation' | 'vitals' | 'other';
+    value: number;
+    unit: string;
+    referenceRange: { low: number | null; high: number | null; text: string };
+    status: 'Normal' | 'Borderline' | 'High' | 'Low' | 'Critical';
+    layExplanation: string;
+  }>;
+  findings: string[];
+  diagnoses: string[];
+  medications: string[];
+  focusAreas: string[];
+  redFlags: string[];
+};

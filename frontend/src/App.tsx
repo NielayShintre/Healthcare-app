@@ -9,16 +9,16 @@
  */
 
 import React, { useState } from 'react';
-import { 
-  BarChart3, 
-  Upload, 
-  MessageSquare, 
-  User, 
-  LayoutDashboard, 
-  Plus, 
-  HelpCircle, 
-  LogOut, 
-  Menu, 
+import {
+  BarChart3,
+  Upload,
+  MessageSquare,
+  User,
+  LayoutDashboard,
+  Plus,
+  HelpCircle,
+  LogOut,
+  Menu,
   X,
   Bell,
   Settings,
@@ -43,6 +43,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from './lib/utils';
 import type { View, PatientData } from './types';
+import { useReport } from './context/ReportContext';
 
 // Mock data and components will be added here
 import OnboardingScreen from './components/screens/OnboardingScreen';
@@ -52,6 +53,7 @@ import ChatScreen from './components/screens/ChatScreen';
 import MarkersHistoryScreen from './components/screens/MarkersHistoryScreen';
 
 export default function App() {
+  const { report } = useReport();
   const [currentView, setCurrentView] = useState<View>('onboarding');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
@@ -64,11 +66,11 @@ export default function App() {
 
   const renderView = () => {
     switch(currentView) {
-      case 'onboarding': return <OnboardingScreen onComplete={() => setCurrentView('dashboard')} />;
+      case 'onboarding': return <OnboardingScreen onComplete={() => setCurrentView('reports')} />;
       case 'dashboard': return <DashboardScreen onNavigate={setCurrentView} />;
-      case 'reports': return <ReportsScreen />;
+      case 'reports': return <ReportsScreen onNavigate={setCurrentView} />;
       case 'chat': return <ChatScreen />;
-      case 'markers': return <MarkersHistoryScreen />;
+      case 'markers': return <MarkersHistoryScreen onNavigate={setCurrentView} />;
       default: return <DashboardScreen onNavigate={setCurrentView} />;
     }
   };
@@ -88,8 +90,8 @@ export default function App() {
             referrerPolicy="no-referrer"
           />
           <div className="min-w-0">
-            <p className="font-bold text-primary leading-tight truncate">Sarah Jenkins</p>
-            <p className="text-xs text-on-surface-variant truncate">ID: #MI-8492</p>
+            <p className="font-bold text-primary leading-tight truncate">{report?.patient.name ?? 'No report uploaded'}</p>
+            <p className="text-xs text-on-surface-variant truncate">{report?.reportMeta.reportDate ?? 'Upload a report to begin'}</p>
           </div>
         </div>
       )}

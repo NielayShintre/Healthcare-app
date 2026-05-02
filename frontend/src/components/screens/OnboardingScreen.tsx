@@ -1,18 +1,53 @@
 import React, { useState } from 'react';
-import { ShieldCheck, ArrowRight, ClipboardList, ChevronRight } from 'lucide-react';
+import { ShieldCheck, ArrowRight } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '../../lib/utils';
 
 interface OnboardingScreenProps {
-  onComplete: () => void;
+  onComplete: (data: any) => void;
+  onDemo: () => void;
 }
 
-export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
-  const [step, setStep] = useState(1);
+export default function OnboardingScreen({ onComplete, onDemo }: OnboardingScreenProps) {
+  const [formData, setFormData] = useState({
+    fullName: '',
+    age: '',
+    sex: '',
+    height: '',
+    weight: '',
+    medications: '',
+    allergies: ''
+  });
+  
+  const [selectedConditions, setSelectedConditions] = useState<string[]>([]);
   
   const conditions = [
     'Hypertension', 'Type 2 Diabetes', 'Asthma', 'None'
   ];
+
+  const toggleCondition = (condition: string) => {
+    if (condition === 'None') {
+      setSelectedConditions(['None']);
+      return;
+    }
+    const newConditions = selectedConditions.filter(c => c !== 'None');
+    if (newConditions.includes(condition)) {
+      setSelectedConditions(newConditions.filter(c => c !== condition));
+    } else {
+      setSelectedConditions([...newConditions, condition]);
+    }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onComplete({
+      ...formData,
+      age: parseInt(formData.age) || 0,
+      height: parseInt(formData.height) || 0,
+      weight: parseInt(formData.weight) || 0,
+      conditions: selectedConditions
+    });
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 lg:p-8 bg-surface">
@@ -56,19 +91,19 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
         <div className="w-full md:w-7/12 p-8 md:p-12 flex flex-col">
           <div className="mb-8">
             <div className="flex justify-between items-center mb-2">
-              <span className="text-xs font-bold text-outline uppercase tracking-widest">Step {step} of 3</span>
+              <span className="text-xs font-bold text-outline uppercase tracking-widest">Step 1 of 3</span>
               <span className="text-xs font-bold text-primary uppercase">Basic Vitals</span>
             </div>
             <div className="w-full bg-surface-container h-1.5 rounded-full overflow-hidden">
               <motion.div 
                 initial={{ width: 0 }}
-                animate={{ width: `${(step / 3) * 100}%` }}
+                animate={{ width: `${(1 / 3) * 100}%` }}
                 className="bg-primary h-full rounded-full"
               />
             </div>
           </div>
 
-          <form className="space-y-6 flex-1" onSubmit={(e) => { e.preventDefault(); onComplete(); }}>
+          <form className="space-y-6 flex-1" onSubmit={handleSubmit}>
             <div className="space-y-6">
               <h3 className="text-2xl font-display font-bold text-on-surface">Personal Information</h3>
               
@@ -77,6 +112,8 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
                 <input 
                   className="w-full bg-surface-container-low border border-outline-variant rounded-xl px-4 py-3 text-on-surface focus:ring-2 focus:ring-primary outline-none transition-all placeholder:text-outline-variant"
                   placeholder="Jane Doe"
+                  value={formData.fullName}
+                  onChange={(e) => setFormData({...formData, fullName: e.target.value})}
                   required
                 />
               </div>
@@ -88,6 +125,8 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
                     type="number"
                     className="w-full bg-surface-container-low border border-outline-variant rounded-xl px-4 py-3 text-on-surface focus:ring-2 focus:ring-primary outline-none transition-all"
                     placeholder="e.g. 34"
+                    value={formData.age}
+                    onChange={(e) => setFormData({...formData, age: e.target.value})}
                     required
                   />
                 </div>
@@ -95,12 +134,14 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
                   <label className="block text-xs font-bold text-on-surface-variant mb-1.5 uppercase tracking-wider">Biological Sex</label>
                   <select 
                     className="w-full bg-surface-container-low border border-outline-variant rounded-xl px-4 py-3 text-on-surface focus:ring-2 focus:ring-primary outline-none transition-all"
+                    value={formData.sex}
+                    onChange={(e) => setFormData({...formData, sex: e.target.value})}
                     required
                   >
                     <option value="">Select...</option>
-                    <option value="f">Female</option>
-                    <option value="m">Male</option>
-                    <option value="o">Other</option>
+                    <option value="female">Female</option>
+                    <option value="male">Male</option>
+                    <option value="other">Other</option>
                   </select>
                 </div>
               </div>
@@ -117,6 +158,8 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
                     type="number"
                     className="w-full bg-surface-container-low border border-outline-variant rounded-xl px-4 py-3 pr-12 text-on-surface focus:ring-2 focus:ring-primary outline-none"
                     placeholder="170"
+                    value={formData.height}
+                    onChange={(e) => setFormData({...formData, height: e.target.value})}
                     required
                   />
                   <span className="absolute right-4 bottom-3.5 text-xs font-bold text-outline uppercase">cm</span>
@@ -127,6 +170,8 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
                     type="number"
                     className="w-full bg-surface-container-low border border-outline-variant rounded-xl px-4 py-3 pr-12 text-on-surface focus:ring-2 focus:ring-primary outline-none"
                     placeholder="65"
+                    value={formData.weight}
+                    onChange={(e) => setFormData({...formData, weight: e.target.value})}
                     required
                   />
                   <span className="absolute right-4 bottom-3.5 text-xs font-bold text-outline uppercase">kg</span>
@@ -143,27 +188,27 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
                   <button
                     key={item}
                     type="button"
-                    className="px-4 py-2 rounded-full border border-outline-variant bg-surface-container-low text-on-surface-variant text-sm font-medium hover:bg-surface-container-high transition-colors active:bg-primary-container active:text-white"
+                    onClick={() => toggleCondition(item)}
+                    className={cn(
+                      "px-4 py-2 rounded-full border transition-all text-sm font-medium",
+                      selectedConditions.includes(item)
+                        ? "bg-primary text-white border-primary shadow-md"
+                        : "border-outline-variant bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high"
+                    )}
                   >
                     {item}
                   </button>
                 ))}
-                <button 
-                  type="button"
-                  className="px-4 py-2 rounded-full border border-dashed border-outline text-outline text-sm font-medium hover:bg-surface-container-low transition-colors flex items-center gap-1"
-                >
-                  + Add Other
-                </button>
               </div>
             </div>
 
             <div className="pt-6 mt-auto flex justify-end gap-3">
               <button 
                 type="button"
-                className="px-6 py-3 rounded-xl font-bold text-primary hover:bg-surface-container transition-colors"
-                onClick={onComplete}
+                className="px-6 py-3 rounded-xl font-bold text-primary hover:bg-surface-container transition-colors border border-primary/20"
+                onClick={onDemo}
               >
-                Skip 
+                Demo User
               </button>
               <button 
                 type="submit"

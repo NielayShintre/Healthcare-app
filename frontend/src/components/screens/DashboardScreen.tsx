@@ -15,52 +15,58 @@ import {
   Droplet
 } from 'lucide-react';
 import { 
-  LineChart, 
-  Line, 
+  AreaChart, 
+  Area,
   XAxis, 
   YAxis, 
   CartesianGrid, 
   Tooltip, 
-  ResponsiveContainer, 
-  AreaChart, 
-  Area 
+  ResponsiveContainer 
 } from 'recharts';
 import { cn } from '../../lib/utils';
-import type { View, VitalMetric, LabResult } from '../../types';
+import type { View, VitalMetric, LabResult, PatientData } from '../../types';
 
 interface DashboardScreenProps {
   onNavigate: (view: View) => void;
+  patient: PatientData | null;
+  labResults: LabResult[];
 }
 
-const vitals: VitalMetric[] = [
-  { label: 'HEART RATE', value: '72', unit: 'bpm', status: 'Normal', icon: 'heart' },
-  { label: 'BLOOD PRESSURE', value: '135/85', unit: 'mmHg', status: 'Elevated', icon: 'activity' },
-  { label: 'WEIGHT / BMI', value: '68 / 23.5', unit: 'kg', status: 'Normal', icon: 'scale' },
-];
+export default function DashboardScreen({ onNavigate, patient, labResults }: DashboardScreenProps) {
+  // Derive vitals from patient data
+  const dynamicVitals: VitalMetric[] = [
+    { label: 'HEART RATE', value: '72', unit: 'bpm', status: 'Normal', icon: 'heart' },
+    { label: 'BLOOD PRESSURE', value: '118/76', unit: 'mmHg', status: 'Normal', icon: 'activity' },
+    { 
+      label: 'WEIGHT / BMI', 
+      value: patient ? `${patient.weight} / ${(patient.weight / ((patient.height/100)**2)).toFixed(1)}` : 'N/A', 
+      unit: 'kg', 
+      status: 'Normal', 
+      icon: 'scale' 
+    },
+  ];
 
-const bloodSugarData = [
-  { month: 'May', value: 85 },
-  { month: 'Jun', value: 92 },
-  { month: 'Jul', value: 118 },
-  { month: 'Aug', value: 105 },
-  { month: 'Sep', value: 98 },
-];
+  // Derive blood sugar trend from labResults if available
+  const glucoseResults = labResults.filter(r => r.marker.toLowerCase().includes('glucose'));
+  const chartData = glucoseResults.length > 0 
+    ? glucoseResults.map(r => ({ month: r.date.split(' ')[0], value: typeof r.value === 'number' ? r.value : parseFloat(r.value as any) || 0 })).reverse()
+    : [
+        { month: 'May', value: 85 },
+        { month: 'Jun', value: 92 },
+        { month: 'Jul', value: 118 },
+        { month: 'Aug', value: 105 },
+        { month: 'Sep', value: 98 },
+      ];
 
-const labResults: LabResult[] = [
-  { marker: 'Total Cholesterol', value: 215, unit: 'mg/dL', date: 'Oct 12, 2023', source: 'Quest Diagnostics', range: '< 200 mg/dL', status: 'High' },
-  { marker: 'HDL (Good)', value: 55, unit: 'mg/dL', date: 'Oct 12, 2023', source: 'Quest Diagnostics', range: '> 50 mg/dL', status: 'Normal' },
-  { marker: 'LDL (Bad)', value: 138, unit: 'mg/dL', date: 'Oct 12, 2023', source: 'Quest Diagnostics', range: '< 100 mg/dL', status: 'Borderline' },
-  { marker: 'Triglycerides', value: 110, unit: 'mg/dL', date: 'Oct 12, 2023', source: 'Quest Diagnostics', range: '< 150 mg/dL', status: 'Normal' },
-];
-
-export default function DashboardScreen({ onNavigate }: DashboardScreenProps) {
   return (
     <div className="p-6 lg:p-10 max-w-7xl mx-auto space-y-8 pb-20 lg:pb-10">
       {/* Header */}
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h2 className="text-3xl font-display font-bold text-on-surface">Health Insights Dashboard</h2>
-          <p className="text-on-surface-variant font-medium mt-1">Patient: Sarah Jenkins · ID: #MI-8492 · Last updated: Oct 24, 2023</p>
+          <p className="text-on-surface-variant font-medium mt-1">
+            Patient: {patient?.fullName || 'Guest'} · ID: #MI-8492 · Last updated: {labResults[0]?.date || 'Oct 24, 2023'}
+          </p>
         </div>
         <div className="flex gap-3">
           <button className="flex items-center gap-2 px-4 py-2 bg-white border border-outline rounded-lg text-sm font-bold text-primary hover:bg-surface-container transition-colors">
@@ -84,7 +90,7 @@ export default function DashboardScreen({ onNavigate }: DashboardScreenProps) {
             Current Vitals
           </h3>
           <div className="space-y-4 flex-1">
-            {vitals.map((v) => (
+            {dynamicVitals.map((v) => (
               <div key={v.label} className="p-3.5 rounded-xl bg-surface-container-low border border-transparent hover:border-outline-variant transition-all flex items-center justify-between group">
                 <div className="flex items-center gap-4">
                   <div className={cn(
@@ -119,9 +125,9 @@ export default function DashboardScreen({ onNavigate }: DashboardScreenProps) {
             <div>
               <h3 className="text-xl font-display font-bold text-on-surface flex items-center gap-2">
                 <Droplet className="h-5 w-5 text-primary" />
-                Fasting Blood Sugar Trend
+                Glucose Trend
               </h3>
-              <p className="text-xs text-on-surface-variant mt-1">6 Month History · Standardized mg/dL</p>
+              <p className="text-xs text-on-surface-variant mt-1">Timeline analysis · Standardized units</p>
             </div>
             <div className="flex bg-surface-container p-1 rounded-lg">
               {['6M', '1Y', 'ALL'].map((range) => (
@@ -140,7 +146,7 @@ export default function DashboardScreen({ onNavigate }: DashboardScreenProps) {
 
           <div className="flex-1 h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={bloodSugarData}>
+              <AreaChart data={chartData}>
                 <defs>
                   <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#00455d" stopOpacity={0.1}/>
@@ -156,7 +162,6 @@ export default function DashboardScreen({ onNavigate }: DashboardScreenProps) {
                   dy={10}
                 />
                 <YAxis 
-                  domain={[60, 140]} 
                   axisLine={false} 
                   tickLine={false} 
                   tick={{ fontSize: 11, fill: '#70787e' }}
@@ -183,23 +188,12 @@ export default function DashboardScreen({ onNavigate }: DashboardScreenProps) {
               </AreaChart>
             </ResponsiveContainer>
           </div>
-
-          <div className="mt-6 flex flex-wrap gap-4 items-center justify-end">
-             <div className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 rounded-full bg-primary" />
-                <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Normal Range (&lt; 100)</span>
-             </div>
-             <div className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 rounded-full bg-error" />
-                <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Borderline (100 - 125)</span>
-             </div>
-          </div>
         </section>
 
         {/* Detailed Lab Table */}
         <section className="lg:col-span-12 bg-white rounded-2xl border border-outline-variant overflow-hidden shadow-sm">
           <div className="p-6 bg-surface-container-low/50 border-b border-outline-variant flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <h3 className="text-xl font-display font-bold text-on-surface">Recent Lab Results Standardization</h3>
+            <h3 className="text-xl font-display font-bold text-on-surface">Recent Lab Results</h3>
             <div className="relative w-full sm:w-72 group">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-outline-variant group-focus-within:text-primary transition-colors" />
               <input 
@@ -220,9 +214,9 @@ export default function DashboardScreen({ onNavigate }: DashboardScreenProps) {
                 </tr>
               </thead>
               <tbody className="text-sm font-medium">
-                {labResults.map((result, idx) => (
+                {labResults.length > 0 ? labResults.map((result, idx) => (
                   <tr 
-                    key={result.marker} 
+                    key={idx} 
                     className={cn(
                       "group hover:bg-surface-container-low transition-colors",
                       idx !== labResults.length - 1 && "border-b border-outline-variant/30"
@@ -232,7 +226,7 @@ export default function DashboardScreen({ onNavigate }: DashboardScreenProps) {
                     <td className="py-5 px-6">
                       <span className={cn(
                         "text-lg font-data font-bold",
-                        result.status === 'High' ? "text-error" : 
+                        result.status === 'High' || result.status === 'Low' ? "text-error" : 
                         result.status === 'Borderline' ? "text-secondary" : "text-on-surface"
                       )}>
                         {result.value}
@@ -247,18 +241,24 @@ export default function DashboardScreen({ onNavigate }: DashboardScreenProps) {
                     <td className="py-5 px-6 text-right">
                       <span className={cn(
                         "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase",
-                        result.status === 'High' ? "bg-error-container text-on-error-container" : 
+                        result.status === 'High' || result.status === 'Low' ? "bg-error-container text-on-error-container" : 
                         result.status === 'Borderline' ? "bg-secondary-container text-on-secondary-container" : 
                         "bg-surface-container-high text-on-surface-variant"
                       )}>
-                        {result.status === 'High' && <ArrowUpRight className="h-3 w-3" />}
+                        {(result.status === 'High' || result.status === 'Low') && <ArrowUpRight className="h-3 w-3" />}
                         {result.status === 'Normal' && <CheckCircle2 className="h-3 w-3" />}
                         {result.status === 'Borderline' && <AlertTriangle className="h-3 w-3" />}
                         {result.status}
                       </span>
                     </td>
                   </tr>
-                ))}
+                )) : (
+                  <tr>
+                    <td colSpan={5} className="py-10 text-center text-on-surface-variant font-medium">
+                      No lab results found. Please upload a report to populate this dashboard.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

@@ -3,7 +3,8 @@
 # Function to handle cleanup on exit
 cleanup() {
     echo "Stopping services..."
-    kill $BACKEND_PID $FRONTEND_PID
+    [ -n "$BACKEND_PID" ] && kill $BACKEND_PID 2>/dev/null
+    [ -n "$FRONTEND_PID" ] && kill $FRONTEND_PID 2>/dev/null
     exit
 }
 
@@ -18,20 +19,28 @@ if [ ! -d "backend/venv" ]; then
     echo "Creating virtual environment..."
     python3 -m venv backend/venv
 fi
-source backend/venv/bin/activate
-pip install -r backend/requirements.txt --quiet
+
+# Ensure dependencies are installed
+# We set PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 to allow building pydantic-core on experimental Python versions (like 3.14)
+export PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1
+backend/venv/bin/pip install -r backend/requirements.txt --quiet
 
 # Start Backend
 echo "📡 Starting Backend on http://localhost:8000..."
+# We run as a module so relative imports in backend/main.py work
 export PYTHONPATH=$PYTHONPATH:$(pwd)
-python -m backend.main > backend.log 2>&1 &
+backend/venv/bin/python -m backend.main > backend.log 2>&1 &
 BACKEND_PID=$!
 
 # 2. Setup Frontend
 echo "📦 Setting up Frontend..."
-cd frontend
-npm install --quiet
+if [ ! -d "frontend/node_modules" ]; then
+    echo "Installing frontend dependencies..."
+    cd frontend && npm install --quiet && cd ..
+fi
+
 echo "🌐 Starting Frontend on http://localhost:3000..."
+cd frontend
 npm run dev > ../frontend.log 2>&1 &
 FRONTEND_PID=$!
 cd ..

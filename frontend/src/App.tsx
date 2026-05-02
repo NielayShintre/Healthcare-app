@@ -8,7 +8,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   BarChart3, 
   Upload, 
@@ -42,7 +42,8 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from './lib/utils';
-import type { View, PatientData } from './types';
+import { storage } from './lib/storage';
+import type { View, PatientData, MedicalReport, LabResult } from './types';
 
 // Mock data and components will be added here
 import OnboardingScreen from './components/screens/OnboardingScreen';
@@ -54,7 +55,59 @@ import MarkersHistoryScreen from './components/screens/MarkersHistoryScreen';
 export default function App() {
   const [currentView, setCurrentView] = useState<View>('onboarding');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  
+  const [patient, setPatient] = useState<PatientData | null>(null);
+  const [reports, setReports] = useState<MedicalReport[]>([]);
+  const [labResults, setLabResults] = useState<LabResult[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    async function init() {
+      const storedPatient = await storage.get('patient_profile') as PatientData;
+      const storedReports = await storage.get('reports') as MedicalReport[] || [];
+      const storedLabResults = await storage.get('lab_results') as LabResult[] || [];
+      
+      if (storedPatient) {
+        setPatient(storedPatient);
+        setReports(storedReports);
+        setLabResults(storedLabResults);
+        setCurrentView('dashboard');
+      }
+      setIsLoading(false);
+    }
+    init();
+  }, []);
+
+  const enterDemoMode = async () => {
+    const demoPatient: PatientData = {
+      fullName: "Sarah Jenkins (Demo)",
+      age: 34,
+      sex: "female",
+      height: 170,
+      weight: 68,
+      conditions: ["Type 2 Diabetes", "Hypertension"],
+      medications: "Metformin, Lisinopril",
+      allergies: "Penicillin"
+    };
+    
+    const demoReports: MedicalReport[] = [
+      { id: 'demo-1', name: 'Comprehensive_Panel_Apr_2024.pdf', date: 'Apr 15, 2024', source: 'Apollo Diagnostics', status: 'Analyzed', type: 'pdf' }
+    ];
+
+    const demoResults: LabResult[] = [
+      { marker: 'Hemoglobin', value: 11.2, unit: 'g/dL', date: 'Apr 15, 2024', source: 'Apollo Diagnostics', range: '13.0 - 17.5', status: 'Low' },
+      { marker: 'Fasting Glucose', value: 105, unit: 'mg/dL', date: 'Apr 15, 2024', source: 'Apollo Diagnostics', range: '70 - 100', status: 'High' }
+    ];
+
+    await storage.set('patient_profile', demoPatient);
+    await storage.set('reports', demoReports);
+    await storage.set('lab_results', demoResults);
+    
+    setPatient(demoPatient);
+    setReports(demoReports);
+    setLabResults(demoResults);
+    setCurrentView('dashboard');
+  };
+
   const navItems = [
     { id: 'dashboard', label: 'Overview', icon: LayoutDashboard },
     { id: 'reports', label: 'Medical Reports', icon: Upload },
@@ -62,14 +115,33 @@ export default function App() {
     { id: 'markers', label: 'Health Markers', icon: BarChart3 },
   ];
 
+  const handleOnboardingComplete = async (data: PatientData) => {
+    await storage.set('patient_profile', data);
+    setPatient(data);
+    setCurrentView('dashboard');
+  };
+
+  const handleReportUpload = async (report: MedicalReport, results: LabResult[]) => {
+    const newReports = [report, ...reports];
+    const newResults = [...results, ...labResults];
+    
+    setReports(newReports);
+    setLabResults(newResults);
+    
+    await storage.set('medical_reports', newReports);
+    await storage.set('lab_results', newResults);
+  };
+
   const renderView = () => {
+    if (isLoading) return <div className="h-screen flex items-center justify-center text-primary font-bold">Loading your health data...</div>;
+    
     switch(currentView) {
-      case 'onboarding': return <OnboardingScreen onComplete={() => setCurrentView('dashboard')} />;
-      case 'dashboard': return <DashboardScreen onNavigate={setCurrentView} />;
-      case 'reports': return <ReportsScreen />;
-      case 'chat': return <ChatScreen />;
-      case 'markers': return <MarkersHistoryScreen />;
-      default: return <DashboardScreen onNavigate={setCurrentView} />;
+      case 'onboarding': return <OnboardingScreen onComplete={handleOnboardingComplete} onDemo={enterDemoMode} />;
+      case 'dashboard': return <DashboardScreen onNavigate={setCurrentView} patient={patient} labResults={labResults} />;
+      case 'reports': return <ReportsScreen reports={reports} onUpload={handleReportUpload} />;
+      case 'chat': return <ChatScreen patient={patient} labResults={labResults} />;
+      case 'markers': return <MarkersHistoryScreen labResults={labResults} />;
+      default: return <DashboardScreen onNavigate={setCurrentView} patient={patient} labResults={labResults} />;
     }
   };
 
@@ -79,17 +151,17 @@ export default function App() {
         <h1 className="text-xl font-bold font-display text-primary tracking-tight">MedInsight AI</h1>
       </div>
 
-      {currentView !== 'onboarding' && (
+      {patient && (
         <div className="flex items-center px-4 py-3 mb-6 bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-outline-variant/30">
           <img 
-            src="https://images.unsplash.com/photo-1559839734-2b71f1536783?auto=format&fit=crop&q=80&w=100&h=100" 
-            alt="Doctor Avatar" 
+            src={`https://ui-avatars.com/api/?name=${encodeURIComponent(patient.fullName)}&background=00455d&color=fff`}
+            alt="Avatar" 
             className="w-10 h-10 rounded-full mr-3 object-cover border border-outline-variant/50"
             referrerPolicy="no-referrer"
           />
           <div className="min-w-0">
-            <p className="font-bold text-primary leading-tight truncate">Sarah Jenkins</p>
-            <p className="text-xs text-on-surface-variant truncate">ID: #MI-8492</p>
+            <p className="font-bold text-primary leading-tight truncate">{patient.fullName}</p>
+            <p className="text-xs text-on-surface-variant truncate">ID: #MI-{Math.floor(Math.random()*9000)+1000}</p>
           </div>
         </div>
       )}

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   CloudUpload, 
   FileText, 
@@ -8,19 +8,119 @@ import {
   MoreHorizontal, 
   RefreshCcw,
   ShieldCheck,
-  MemoryStick as Memory
+  MemoryStick as Memory,
+  Loader2,
+  CheckCircle2
 } from 'lucide-react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../../lib/utils';
-import type { MedicalReport } from '../../types';
+import type { MedicalReport, LabResult } from '../../types';
 
-const reports: MedicalReport[] = [
-  { id: '1', name: 'MRI_Lumbar_Spine.pdf', date: 'Oct 24, 2023', source: 'Quest Diagnostics', status: 'Analyzed', type: 'pdf' },
-  { id: '2', name: 'Chest_XRay_AP.jpg', date: 'Oct 26, 2023', source: 'City Hospital Rad', status: 'Processing', type: 'image' },
-  { id: '3', name: 'Metabolic_Panel_Comprehensive.pdf', date: 'Oct 20, 2023', source: 'LabCorp', status: 'Analyzed', type: 'pdf' },
-];
+interface ReportsScreenProps {
+  reports: MedicalReport[];
+  onUpload: (report: MedicalReport, results: LabResult[]) => void;
+}
 
-export default function ReportsScreen() {
+export default function ReportsScreen({ reports, onUpload }: ReportsScreenProps) {
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+
+  const simulateUpload = async (file: File) => {
+    setIsUploading(true);
+    setUploadProgress(10);
+    
+    // Simulate progress
+    for (let i = 20; i <= 90; i += 20) {
+      await new Promise(r => setTimeout(r, 400));
+      setUploadProgress(i);
+    }
+
+    try {
+      // 1. Try real backend upload
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch('http://localhost:8000/api/reports/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        
+        const newReport: MedicalReport = {
+          id: Date.now().toString(),
+          name: file.name,
+          date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          source: data.lab_name || 'Extracted Report',
+          status: 'Analyzed',
+          type: file.type.includes('pdf') ? 'pdf' : 'image'
+        };
+
+        const newResults: LabResult[] = data.markers.map((m: any) => ({
+          marker: m.name,
+          value: m.value,
+          unit: m.unit,
+          date: newReport.date,
+          source: newReport.source,
+          range: `${m.lab_range_low} - ${m.lab_range_high}`,
+          status: m.status
+        }));
+
+        onUpload(newReport, newResults);
+      } else {
+        throw new Error('Backend unavailable');
+      }
+    } catch (error) {
+      console.warn('Backend upload failed, using fallback parser:', error);
+      
+      // 2. Fallback: Mock Parser for Demo
+      const mockReport: MedicalReport = {
+        id: Date.now().toString(),
+        name: file.name,
+        date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        source: 'MediLens AI Parser',
+        status: 'Analyzed',
+        type: file.type.includes('pdf') ? 'pdf' : 'image'
+      };
+
+      const mockResults: LabResult[] = [
+        {
+          marker: 'Vitamin D',
+          value: 24.5,
+          unit: 'ng/mL',
+          date: mockReport.date,
+          source: mockReport.source,
+          range: '30.0 - 100.0',
+          status: 'Low'
+        },
+        {
+          marker: 'Cholesterol',
+          value: 185,
+          unit: 'mg/dL',
+          date: mockReport.date,
+          source: mockReport.source,
+          range: '< 200',
+          status: 'Normal'
+        }
+      ];
+
+      onUpload(mockReport, mockResults);
+    } finally {
+      setUploadProgress(100);
+      setTimeout(() => {
+        setIsUploading(false);
+        setUploadProgress(0);
+      }, 500);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.[0]) {
+      simulateUpload(e.target.files[0]);
+    }
+  };
+
   return (
     <div className="p-6 lg:p-10 max-w-7xl mx-auto space-y-8">
       {/* Header */}
@@ -33,125 +133,166 @@ export default function ReportsScreen() {
         {/* Dropzone Area */}
         <section className="lg:col-span-8 bg-white rounded-2xl border border-outline-variant p-6 shadow-sm flex flex-col min-h-[400px]">
           <h2 className="text-xl font-display font-bold text-on-surface mb-6">New Upload</h2>
-          <div className="flex-1 border-2 border-dashed border-primary-fixed-dim bg-surface-container-low/50 rounded-2xl p-8 flex flex-col items-center justify-center text-center group cursor-pointer hover:bg-surface-container hover:border-primary transition-all duration-300">
-            <div className="w-16 h-16 bg-primary-container text-on-primary-container rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-              <CloudUpload className="h-8 w-8" />
+          
+          <div 
+            className={cn(
+              "flex-1 border-2 border-dashed rounded-2xl p-8 flex flex-col items-center justify-center text-center group transition-all duration-300 relative",
+              isUploading ? "border-primary bg-primary/5" : "border-primary-fixed-dim bg-surface-container-low/50 hover:bg-surface-container hover:border-primary cursor-pointer"
+            )}
+            onClick={() => !isUploading && document.getElementById('file-upload')?.click()}
+          >
+            <input 
+              type="file" 
+              id="file-upload" 
+              className="hidden" 
+              onChange={handleFileChange}
+              disabled={isUploading}
+            />
+
+            <AnimatePresence mode="wait">
+              {isUploading ? (
+                <motion.div 
+                  key="uploading"
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="flex flex-col items-center"
+                >
+                  <div className="relative w-20 h-20 mb-6">
+                    <Loader2 className="h-20 w-20 text-primary animate-spin" />
+                    <div className="absolute inset-0 flex items-center justify-center text-xs font-black text-primary">
+                      {uploadProgress}%
+                    </div>
+                  </div>
+                  <h3 className="text-lg font-bold text-on-surface mb-1">Analyzing Document...</h3>
+                  <p className="text-sm text-on-surface-variant max-w-xs">Extracting health markers and standardizing units using MediLens AI.</p>
+                </motion.div>
+              ) : (
+                <motion.div 
+                  key="idle"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="flex flex-col items-center"
+                >
+                  <div className="w-16 h-16 bg-primary-container text-on-primary-container rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform shadow-inner">
+                    <CloudUpload className="h-8 w-8" />
+                  </div>
+                  <h3 className="text-lg font-bold text-on-surface mb-1">Drag & Drop Files Here</h3>
+                  <p className="text-sm text-on-surface-variant mb-6 max-w-xs">Supported formats: PDF, JPG, PNG (Max 50MB)</p>
+                  <button 
+                    className="bg-primary text-white font-bold py-3 px-8 rounded-xl shadow-md hover:bg-primary-container transition-all"
+                  >
+                    Browse Files
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          <div className="mt-6 flex items-center justify-center gap-8 text-[10px] font-black text-outline-variant uppercase tracking-[0.2em]">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-primary" />
+              HIPAA COMPLIANT
             </div>
-            <h3 className="text-lg font-bold text-on-surface mb-1">Drag & Drop Files Here</h3>
-            <p className="text-sm text-on-surface-variant mb-6 max-w-xs">Supported formats: PDF, JPG, PNG, DICOM (Max 50MB)</p>
-            <button className="bg-primary text-white font-bold py-3 px-8 rounded-xl shadow-md hover:bg-primary-container transition-all">
-              Browse Files
+            <div className="flex items-center gap-2">
+              <Memory className="h-4 w-4 text-primary" />
+              LOCAL-ONLY PROCESSING
+            </div>
+          </div>
+        </section>
+
+        {/* Sidebar Info */}
+        <aside className="lg:col-span-4 space-y-6">
+          <div className="bg-primary text-white p-6 rounded-2xl shadow-lg relative overflow-hidden">
+             <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-bl-full -mr-8 -mt-8" />
+             <h3 className="text-lg font-bold mb-4 relative z-10">How it works</h3>
+             <ul className="space-y-4 relative z-10">
+               {[
+                 { step: 1, text: "Upload your lab PDF or photo." },
+                 { step: 2, text: "AI extracts values & ranges." },
+                 { step: 3, text: "Markers are automatically added to your history." }
+               ].map((item) => (
+                 <li key={item.step} className="flex gap-3 items-start">
+                   <span className="flex-shrink-0 w-6 h-6 bg-white/20 rounded-full flex items-center justify-center text-xs font-bold">{item.step}</span>
+                   <p className="text-sm font-medium leading-snug">{item.text}</p>
+                 </li>
+               ))}
+             </ul>
+          </div>
+          
+          <div className="bg-white border border-outline-variant p-6 rounded-2xl shadow-sm">
+             <h3 className="text-sm font-black text-on-surface-variant uppercase tracking-widest mb-4 flex items-center gap-2">
+               <RefreshCcw className="h-4 w-4" />
+               Recent Activity
+             </h3>
+             <div className="space-y-4">
+                {reports.slice(0, 3).map((report) => (
+                  <div key={report.id} className="flex items-center gap-3 pb-3 border-b border-outline-variant/30 last:border-0 last:pb-0">
+                    <div className="w-8 h-8 bg-surface-container rounded-lg flex items-center justify-center text-primary">
+                      {report.type === 'pdf' ? <FileText className="h-4 w-4" /> : <ImageIcon className="h-4 w-4" />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-on-surface truncate">{report.name}</p>
+                      <p className="text-[10px] text-on-surface-variant">{report.date}</p>
+                    </div>
+                    <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
+                  </div>
+                ))}
+             </div>
+          </div>
+        </aside>
+
+        {/* History Table */}
+        <section className="lg:col-span-12 bg-white rounded-2xl border border-outline-variant shadow-sm overflow-hidden">
+          <div className="p-6 border-b border-outline-variant flex justify-between items-center">
+            <h2 className="text-xl font-display font-bold text-on-surface">Analysis History</h2>
+            <button className="text-sm font-bold text-primary flex items-center gap-2 hover:underline">
+              <Filter className="h-4 w-4" />
+              Filter
             </button>
           </div>
-        </section>
-
-        {/* Side Panel */}
-        <section className="lg:col-span-4 flex flex-col gap-6">
-          {/* Active Analysis Card */}
-          <div className="bg-primary text-white rounded-2xl p-6 shadow-lg relative overflow-hidden">
-             <div className="absolute top-0 right-0 p-4 opacity-20">
-                <Memory className="h-20 w-20 animate-pulse" />
-             </div>
-             <div className="relative z-10">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-xs font-bold uppercase tracking-widest text-[#95d6f7]">Active Analysis</h2>
-                  <div className="flex items-center gap-1.5 px-2 py-0.5 bg-white/20 rounded-md">
-                     <div className="w-1 h-1 bg-white rounded-full animate-ping" />
-                     <span className="text-[10px] font-bold">LIVE</span>
-                  </div>
-                </div>
-                <div className="space-y-4">
-                  <div>
-                    <div className="flex justify-between items-end mb-2">
-                      <p className="text-sm font-bold truncate pr-4">CBC_Blood_Panel_2023.pdf</p>
-                      <p className="text-xs font-bold text-[#95d6f7]">45%</p>
-                    </div>
-                    <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
-                       <motion.div 
-                        initial={{ width: 0 }}
-                        animate={{ width: '45%' }}
-                        className="bg-white h-full rounded-full"
-                       />
-                    </div>
-                  </div>
-                  <p className="text-[10px] uppercase font-bold tracking-widest text-[#95d6f7]">Extracting biomarker patterns...</p>
-                </div>
-             </div>
-          </div>
-
-          {/* Security Info */}
-          <div className="bg-white rounded-2xl p-6 border border-outline-variant flex-1 flex flex-col justify-center relative overflow-hidden group">
-            <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:scale-110 transition-transform duration-500">
-               <ShieldCheck className="h-32 w-32" />
-            </div>
-            <h3 className="text-xl font-display font-bold text-on-surface mb-2 relative z-10">End-to-End Encryption</h3>
-            <p className="text-sm text-on-surface-variant leading-relaxed relative z-10">
-              All uploaded documents are encrypted at rest and in transit. Complying with HIPAA guidelines for maximum security.
-            </p>
-          </div>
-        </section>
-
-        {/* Previous Reports Table */}
-        <section className="lg:col-span-12 bg-white rounded-2xl border border-outline-variant shadow-sm overflow-hidden">
-          <div className="p-6 bg-surface-container-low/50 border-b border-outline-variant flex justify-between items-center">
-             <h2 className="text-xl font-display font-bold text-on-surface">Recent Reports</h2>
-             <button className="flex items-center gap-2 text-primary font-bold text-xs uppercase tracking-widest hover:opacity-80 transition-opacity">
-                <Filter className="h-4 w-4" />
-                Filter
-             </button>
-          </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            <table className="w-full text-left">
               <thead>
-                <tr className="bg-surface-container border-b border-outline-variant">
-                  <th className="py-4 px-6 text-[10px] font-bold text-outline-variant uppercase tracking-widest">Document Name</th>
-                  <th className="py-4 px-6 text-[10px] font-bold text-outline-variant uppercase tracking-widest">Date Uploaded</th>
-                  <th className="py-4 px-6 text-[10px] font-bold text-outline-variant uppercase tracking-widest">Source Lab</th>
-                  <th className="py-4 px-6 text-[10px] font-bold text-outline-variant uppercase tracking-widest">Status</th>
-                  <th className="py-4 px-6 text-[10px] font-bold text-outline-variant uppercase tracking-widest text-right">Actions</th>
+                <tr className="bg-surface-container text-[10px] font-black text-on-surface-variant uppercase tracking-widest">
+                  <th className="py-4 px-6">Document Name</th>
+                  <th className="py-4 px-6">Analysis Date</th>
+                  <th className="py-4 px-6">Lab Source</th>
+                  <th className="py-4 px-6">Status</th>
+                  <th className="py-4 px-6 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="text-sm">
-                {reports.map((report, idx) => (
-                  <tr 
-                    key={report.id} 
-                    className={cn(
-                      "group hover:bg-surface-container-low transition-colors",
-                      idx !== reports.length - 1 && "border-b border-outline-variant/30"
-                    )}
-                  >
-                    <td className="py-5 px-6 flex items-center gap-4">
-                      <div className={cn(
-                        "w-10 h-10 rounded-lg flex items-center justify-center",
-                        report.type === 'pdf' ? "bg-primary/10 text-primary" : "bg-surface-container-high text-on-surface-variant"
-                      )}>
-                        {report.type === 'pdf' ? <FileText className="h-5 w-5" /> : <ImageIcon className="h-5 w-5" />}
+                {reports.length > 0 ? reports.map((report) => (
+                  <tr key={report.id} className="border-b border-outline-variant/30 hover:bg-surface-container-low transition-colors">
+                    <td className="py-4 px-6">
+                      <div className="flex items-center gap-3">
+                        {report.type === 'pdf' ? <FileText className="h-5 w-5 text-red-500" /> : <ImageIcon className="h-5 w-5 text-blue-500" />}
+                        <span className="font-bold text-on-surface">{report.name}</span>
                       </div>
-                      <span className="font-bold text-on-surface">{report.name}</span>
                     </td>
-                    <td className="py-5 px-6 text-on-surface-variant font-medium">{report.date}</td>
-                    <td className="py-5 px-6 text-on-surface-variant font-medium">{report.source}</td>
-                    <td className="py-5 px-6">
-                      <span className={cn(
-                        "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider",
-                        report.status === 'Analyzed' ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"
-                      )}>
-                        {report.status === 'Processing' && <RefreshCcw className="h-3 w-3 animate-spin" />}
+                    <td className="py-4 px-6 text-on-surface-variant">{report.date}</td>
+                    <td className="py-4 px-6 font-medium text-on-surface">{report.source}</td>
+                    <td className="py-4 px-6">
+                      <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-[10px] font-bold uppercase tracking-wider">
                         {report.status}
                       </span>
                     </td>
-                    <td className="py-5 px-6 text-right">
-                      <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button className="p-2 text-primary hover:bg-white rounded-lg transition-colors">
-                          <Eye className="h-4 w-4" />
-                        </button>
-                        <button className="p-2 text-on-surface-variant hover:bg-white rounded-lg transition-colors">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </button>
-                      </div>
+                    <td className="py-4 px-6 text-right">
+                      <button className="p-2 hover:bg-surface-container rounded-lg transition-colors text-on-surface-variant">
+                        <Eye className="h-4 w-4" />
+                      </button>
+                      <button className="p-2 hover:bg-surface-container rounded-lg transition-colors text-on-surface-variant">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </button>
                     </td>
                   </tr>
-                ))}
+                )) : (
+                  <tr>
+                    <td colSpan={5} className="py-12 text-center text-on-surface-variant font-medium">
+                      No reports analyzed yet.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

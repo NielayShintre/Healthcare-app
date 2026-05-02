@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+backend/venv/
+.venv/
+env/
+venv/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Build outputs
+dist/
+build/
+*.log
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# IDE Files
+.vscode/
+.idea/
+.gemini/
+.antigravity/
+
+# Medilens specific
+backend/logs/
+frontend/logs/
+*.log

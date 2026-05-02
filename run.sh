@@ -16,9 +16,10 @@ echo "🚀 Starting MediLens Unified Development Environment..."
 echo "📦 Setting up Backend..."
 if [ ! -d "backend/venv" ]; then
     echo "Creating virtual environment..."
-    python3 -m venv backend/venv
+    python3.13 -m venv backend/venv
 fi
 source backend/venv/bin/activate
+export PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1
 pip install -r backend/requirements.txt --quiet
 
 # Start Backend

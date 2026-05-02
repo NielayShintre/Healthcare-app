@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Heart, 
   Activity, 
@@ -38,12 +38,19 @@ const vitals: VitalMetric[] = [
   { label: 'WEIGHT / BMI', value: '68 / 23.5', unit: 'kg', status: 'Normal', icon: 'scale' },
 ];
 
-const bloodSugarData = [
+const allBloodSugarData = [
+  { month: 'Nov', value: 88 },
+  { month: 'Dec', value: 90 },
+  { month: 'Jan', value: 85 },
+  { month: 'Feb', value: 87 },
+  { month: 'Mar', value: 92 },
+  { month: 'Apr', value: 95 },
   { month: 'May', value: 85 },
   { month: 'Jun', value: 92 },
   { month: 'Jul', value: 118 },
   { month: 'Aug', value: 105 },
   { month: 'Sep', value: 98 },
+  { month: 'Oct', value: 96 },
 ];
 
 const labResults: LabResult[] = [
@@ -54,6 +61,45 @@ const labResults: LabResult[] = [
 ];
 
 export default function DashboardScreen({ onNavigate }: DashboardScreenProps) {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [timeRange, setTimeRange] = useState('6M');
+
+  const filteredLabResults = useMemo(() => {
+    return labResults.filter(result => 
+      result.marker.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      result.source.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [searchTerm]);
+
+  const filteredBloodSugarData = useMemo(() => {
+    if (timeRange === '6M') {
+      return allBloodSugarData.slice(-6);
+    } else if (timeRange === '1Y') {
+      return allBloodSugarData.slice(-12);
+    }
+    return allBloodSugarData;
+  }, [timeRange]);
+
+  const handleExportPDF = () => {
+    window.print();
+  };
+
+  const handleShareRecords = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Health Insights Dashboard',
+          text: 'Patient: Sarah Jenkins Health Records',
+          url: window.location.href,
+        });
+      } catch (error) {
+        console.error('Error sharing:', error);
+      }
+    } else {
+      alert('Sharing is not supported on this browser.');
+    }
+  };
+
   return (
     <div className="p-6 lg:p-10 max-w-7xl mx-auto space-y-8 pb-20 lg:pb-10">
       {/* Header */}
@@ -63,11 +109,17 @@ export default function DashboardScreen({ onNavigate }: DashboardScreenProps) {
           <p className="text-on-surface-variant font-medium mt-1">Patient: Sarah Jenkins · ID: #MI-8492 · Last updated: Oct 24, 2023</p>
         </div>
         <div className="flex gap-3">
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-outline rounded-lg text-sm font-bold text-primary hover:bg-surface-container transition-colors">
+          <button 
+            onClick={handleExportPDF}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-outline rounded-lg text-sm font-bold text-primary hover:bg-surface-container transition-colors"
+          >
             <Download className="h-4 w-4" />
             Export PDF
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-bold shadow-md hover:bg-primary-container transition-all">
+          <button 
+            onClick={handleShareRecords}
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-bold shadow-md hover:bg-primary-container transition-all"
+          >
             <Share2 className="h-4 w-4" />
             Share Records
           </button>
@@ -127,9 +179,10 @@ export default function DashboardScreen({ onNavigate }: DashboardScreenProps) {
               {['6M', '1Y', 'ALL'].map((range) => (
                 <button 
                   key={range}
+                  onClick={() => setTimeRange(range)}
                   className={cn(
                     "px-4 py-1.5 rounded-md text-xs font-bold transition-all",
-                    range === '6M' ? "bg-white text-primary shadow-sm" : "text-on-surface-variant hover:text-on-surface"
+                    timeRange === range ? "bg-white text-primary shadow-sm" : "text-on-surface-variant hover:text-on-surface"
                   )}
                 >
                   {range}
@@ -140,7 +193,7 @@ export default function DashboardScreen({ onNavigate }: DashboardScreenProps) {
 
           <div className="flex-1 h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={bloodSugarData}>
+              <AreaChart data={filteredBloodSugarData}>
                 <defs>
                   <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#00455d" stopOpacity={0.1}/>
@@ -203,6 +256,8 @@ export default function DashboardScreen({ onNavigate }: DashboardScreenProps) {
             <div className="relative w-full sm:w-72 group">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-outline-variant group-focus-within:text-primary transition-colors" />
               <input 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search health markers..." 
                 className="w-full pl-9 pr-4 py-2 bg-white border border-outline-variant rounded-full text-sm outline-none focus:ring-2 focus:ring-primary transition-all"
               />
@@ -220,12 +275,12 @@ export default function DashboardScreen({ onNavigate }: DashboardScreenProps) {
                 </tr>
               </thead>
               <tbody className="text-sm font-medium">
-                {labResults.map((result, idx) => (
+                {filteredLabResults.map((result, idx) => (
                   <tr 
                     key={result.marker} 
                     className={cn(
                       "group hover:bg-surface-container-low transition-colors",
-                      idx !== labResults.length - 1 && "border-b border-outline-variant/30"
+                      idx !== filteredLabResults.length - 1 && "border-b border-outline-variant/30"
                     )}
                   >
                     <td className="py-5 px-6 font-bold text-on-surface">{result.marker}</td>
